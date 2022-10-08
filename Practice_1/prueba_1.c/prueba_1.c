@@ -1,0 +1,100 @@
+#include <pthread.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <math.h>
+#include <time.h>
+//Establecemos el numero de threads que queremos crear 
+#define NUM_THREADS   244
+//Establecemos el numero de puntos a generar 
+int numero_puntos = 100000;
+//Contador para mantener el registro de la cantidad de puntos dentro del circulo 
+int dentro_circulo = 0;
+double radius=1;
+pthread_mutex_t lock;
+//Cantidad de puntos por thread
+int repartidor_threads;
+
+unsigned int seed;
+
+double r2(){
+    return (double)rand_r(&seed) / (double)((unsigned)RAND_MAX + 1);
+}
+//Esta funcion es para saber si el punto colocado por el thread se encuentra dentro del circulo o fuera 
+int encuentra_circ(double x, double y){
+    double radio2=radius*radius; 
+    double x2= x*x; 
+    double y2=y*y; 
+    
+
+    double d = (radio2) -( (x2) + (y2));
+    
+    
+    //si el calculo de "d" es mayor a 0 sabemos que el punto esta dentro del circulo y sumamos al contador 
+    if(d>=0){
+        return 1;
+    }else{
+        return 0;
+    }
+}
+
+void * Count(void * a){
+    int cont=0;
+    //comenzamos el mutex 
+    pthread_mutex_lock(&lock);
+    int j;
+    // se crea una cantidad definida (repartidor_threads) de puntos por cada thread 
+    //se crea punto 
+    //Se busca dicho punto para saber su posicion con respecto al circulo
+    //Si está dentro se agrega al contador  
+    for (j=1; j<=repartidor_threads; j++){
+        double xcoordinate = r2();
+        double ycoordinate = r2();
+        int circ=encuentra_circ(xcoordinate,ycoordinate);
+        if (circ==1) {
+            dentro_circulo = dentro_circulo + 1;
+        }else{
+            cont++;
+        }
+    }
+    //una vez se acaba el for de ese thread, se termina el mutex
+    pthread_mutex_unlock(&lock);
+     return NULL;
+}
+
+int main(int argc, char *argv[]){
+    //En esta parte del codigo se comienza el reloj general del programa 
+    clock_t start, end;
+    double cpu_time_used;
+
+    start = clock();
+    //Forma de saber si la inicializacion del mutex fallo 
+    if (pthread_mutex_init(&lock, NULL) != 0){
+        printf("\n fallo al inicializar mutex\n");
+            return 1;
+    }
+    seed = time(NULL);
+    //se establece la cantidad de threads definidas en la parte superior del codigo 
+    pthread_t threads[NUM_THREADS];
+    //Se establece cuantos puntos le toca a cada uno de los threads
+    repartidor_threads= numero_puntos/NUM_THREADS;
+
+    int i,i2;
+    // mediante este for creamos cada una de los threads establecidos 
+    for(i=0; i<NUM_THREADS; i++){
+        pthread_create(&threads[i], NULL, Count, NULL);
+    }
+    //Con esta funcion lo que hacemos es esperar a que el thread especificado termine
+
+    for(i2=0; i2<NUM_THREADS; i2++){
+        pthread_join(threads[i2], NULL);
+    }
+    //establecemos el valor de pi calculado con la formula sacada en la clase 
+    double PI = 4.0*(double)dentro_circulo/(double)numero_puntos;
+    //Terminamos el reloj 
+    end = clock();
+    cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
+    //Se imprime la canridad de segundos que tomo el ejecutar todo el procedimiento
+    printf("PI = %f\nTime used=%f",PI, cpu_time_used);
+    //Se destruye el mutex creado 
+    pthread_mutex_destroy(&lock);
+}
